@@ -27,6 +27,48 @@ interface QuarterProps {
   data: PlannerQuarterData;
 }
 
+/*
+ // slot for a course in a quarter (for later mixing multiple courses together)
+interface QuarterCourseSlotProps {
+  course: PlannerQuarterData['courses'][number];
+  index: number;
+  yearIndex: number;
+  quarterIndex: number;
+  invalidCourses: any[]; // tighten this later
+  removeCourseAt: (index: number) => void;
+}
+
+const QuarterCourseSlot: FC<QuarterCourseSlotProps> = ({
+  course,
+  index,
+  yearIndex,
+  quarterIndex,
+  invalidCourses,
+  removeCourseAt,
+}) => {
+  let requiredCourses: string[] = null!;
+
+  invalidCourses.forEach((ic) => {
+    const loc = ic.location;
+    if (loc.courseIndex === index && loc.quarterIndex === quarterIndex && loc.yearIndex === yearIndex) {
+      requiredCourses = ic.required;
+    }
+  });
+
+  // For now this just renders the existing Course exactly as before.
+  return (
+    <Course
+      key={index}
+      data={course}
+      requiredCourses={requiredCourses}
+      onDelete={() => removeCourseAt(index)}
+      addMode="drag"
+      openPopoverLeft
+    />
+  );
+};
+*/
+
 const Quarter: FC<QuarterProps> = ({ yearIndex, quarterIndex, data }) => {
   const dispatch = useAppDispatch();
   const quarterTitle = quarterDisplayNames[data.name];

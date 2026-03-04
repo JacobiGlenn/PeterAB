@@ -18,7 +18,9 @@ module.exports = {
   rules: {
     'react/no-unescaped-entities': 'off',
     'no-console': ['warn', { allow: ['warn', 'error'] }],
+    '@next/next/no-html-link-for-pages': 'off',
   },
+
   settings: {
     react: {
       version: 'detect',
