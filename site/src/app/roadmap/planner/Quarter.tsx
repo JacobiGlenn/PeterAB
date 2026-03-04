@@ -10,7 +10,7 @@ import {
   setActiveCourse,
   showMobileCatalog,
 } from '../../../store/slices/roadmapSlice';
-import { CourseIdentifier, PlannerQuarterData } from '../../../types/types';
+import { CourseIdentifier, InvalidCourseData, PlannerQuarterData } from '../../../types/types';
 import './Quarter.scss';
 
 import Course from './Course';
@@ -27,14 +27,13 @@ interface QuarterProps {
   data: PlannerQuarterData;
 }
 
-/*
- // slot for a course in a quarter (for later mixing multiple courses together)
+// slot for a course in a quarter (for later mixing multiple courses together)
 interface QuarterCourseSlotProps {
   course: PlannerQuarterData['courses'][number];
   index: number;
   yearIndex: number;
   quarterIndex: number;
-  invalidCourses: any[]; // tighten this later
+  invalidCourses: InvalidCourseData[];
   removeCourseAt: (index: number) => void;
 }
 
@@ -55,7 +54,7 @@ const QuarterCourseSlot: FC<QuarterCourseSlotProps> = ({
     }
   });
 
-  // For now this just renders the existing Course exactly as before.
+  // addMode="drag" somehow fixes the issue with tapping a course after adding on mobile
   return (
     <Course
       key={index}
@@ -67,7 +66,6 @@ const QuarterCourseSlot: FC<QuarterCourseSlotProps> = ({
     />
   );
 };
-*/
 
 const Quarter: FC<QuarterProps> = ({ yearIndex, quarterIndex, data }) => {
   const dispatch = useAppDispatch();
@@ -195,28 +193,17 @@ const Quarter: FC<QuarterProps> = ({ yearIndex, quarterIndex, data }) => {
         }}
         {...quarterSortable}
       >
-        {data.courses.map((course, index) => {
-          let requiredCourses: string[] = null!;
-          // if this is an invalid course, set the required courses
-          invalidCourses.forEach((ic) => {
-            const loc = ic.location;
-            if (loc.courseIndex == index && loc.quarterIndex == quarterIndex && loc.yearIndex == yearIndex) {
-              requiredCourses = ic.required;
-            }
-          });
-
-          return (
-            // addMode="drag" somehow fixes the issue with tapping a course after adding on mobile
-            <Course
-              key={index}
-              data={course}
-              requiredCourses={requiredCourses}
-              onDelete={() => removeCourseAt(index)}
-              addMode="drag"
-              openPopoverLeft
-            />
-          );
-        })}
+        {data.courses.map((course, index) => (
+          <QuarterCourseSlot
+            key={index}
+            course={course}
+            index={index}
+            yearIndex={yearIndex}
+            quarterIndex={quarterIndex}
+            invalidCourses={invalidCourses}
+            removeCourseAt={removeCourseAt}
+          />
+        ))}
       </ReactSortable>
     </Card>
   );
