@@ -3,7 +3,7 @@ import './ImportTranscriptPopup.scss';
 import { getNextPlannerTempId, reviseRoadmap, selectAllPlans, setPlanIndex } from '../../../store/slices/roadmapSlice';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { parse as parseHTML, HTMLElement } from 'node-html-parser';
-import { BatchCourseData, PlannerQuarterData, PlannerYearData } from '../../../types/types';
+import { BatchCourseData, CourseGQLData, PlannerQuarterData, PlannerYearData } from '../../../types/types';
 import { quarters } from '@peterportal/types';
 import { searchAPIResults } from '../../../helpers/util';
 import { markTransfersAsUnread } from '../../../helpers/transferCredits';
@@ -108,7 +108,15 @@ function toPlannerQuarter(
 
   return {
     startYear: name === 'Fall' ? year : year - 1,
-    quarterData: { name, courses: quarter.courses.map((c) => courses[toCourseID(c)]) },
+    quarterData: {
+      name,
+      courses: quarter.courses
+        .map((c) => {
+          const course = courses[toCourseID(c)];
+          return course ? { type: 'single' as const, course, id: course.id } : null;
+        })
+        .filter((s): s is { type: 'single'; course: CourseGQLData; id: string } => s != null),
+    },
   };
 }
 

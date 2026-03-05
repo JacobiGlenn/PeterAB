@@ -9,7 +9,7 @@ import {
   CompletedCourseSet,
 } from '../../../helpers/courseRequirements';
 import { CourseNameAndInfo } from '../planner/Course';
-import { CourseGQLData } from '../../../types/types';
+import { CourseGQLData, getSlotCourses, getSlotUnits } from '../../../types/types';
 import trpc from '../../../trpc';
 import { programRequirementsSortable } from '../../../helpers/sortable';
 import { ReactSortable, SortableEvent } from 'react-sortablejs';
@@ -340,10 +340,13 @@ const ProgramRequirementsList: FC<RequireCourseListProps> = ({
   const roadmapPlanIndex = useAppSelector((state) => state.roadmap.currentPlanIndex);
   const yearPlans = roadmapPlans[roadmapPlanIndex].content.yearPlans;
 
-  const roadmapCourseMap = yearPlans
-    .flatMap((year) => year.quarters)
-    .flatMap((quarter) => quarter.courses)
-    .map((course) => [course.id, { units: course.minUnits }]);
+  const roadmapCourseMap = yearPlans.flatMap((year) =>
+    year.quarters.flatMap((quarter) =>
+      quarter.courses.flatMap((slot) =>
+        getSlotCourses(slot).map((course) => [course.id, { units: getSlotUnits(slot) }]),
+      ),
+    ),
+  );
   const transferCourseMap = transferredCourses.map((t) => [
     t.courseName.replace(/\s/g, ''),
     { units: t.units ?? 0, transferType: t.transferType },

@@ -57,17 +57,17 @@ interface YearStatsProps {
 }
 const YearStats = ({ year }: YearStatsProps) => {
   let unitCount = 0;
-  let courseCount = 0;
+  let slotCount = 0;
   year.quarters.forEach((quarter) => {
-    quarter.courses.forEach((course) => {
-      unitCount += course.minUnits;
-      courseCount += 1;
+    quarter.courses.forEach((slot) => {
+      unitCount += slot.type === 'single' ? slot.course.minUnits : Math.max(slot.a.minUnits, slot.b.minUnits);
+      slotCount += 1;
     });
   });
 
   return (
     <p className="year-stats">
-      <span className="course-count">{courseCount}</span> {pluralize(courseCount, 'courses', 'course')}
+      <span className="course-count">{slotCount}</span> {pluralize(slotCount, 'courses', 'course')}
       {' • '}
       <span className="unit-count">{unitCount}</span> {pluralize(unitCount, 'units', 'unit')}
     </p>

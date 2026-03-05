@@ -35,7 +35,11 @@ export function useClearedCoursesUntil(courseId: string): Set<string> {
 
     for (const year of currentPlan) {
       for (const quarter of year.quarters) {
-        const ids = quarter.courses.map((c) => `${c.department} ${c.courseNumber}`);
+        const ids = quarter.courses.flatMap((slot) =>
+          slot.type === 'single'
+            ? [`${slot.course.department} ${slot.course.courseNumber}`]
+            : [`${slot.a.department} ${slot.a.courseNumber}`, `${slot.b.department} ${slot.b.courseNumber}`],
+        );
 
         if (ids.includes(courseId)) {
           return takenSoFar;

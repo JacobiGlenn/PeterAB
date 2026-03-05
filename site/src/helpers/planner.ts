@@ -18,10 +18,12 @@ import { searchAPIResults } from './util';
 import { defaultPlan } from '../store/slices/roadmapSlice';
 import {
   BatchCourseData,
+  getSlotCourses,
   InvalidCourseData,
   PlannerData,
   PlannerQuarterData,
   PlannerYearData,
+  QuarterSlot,
   RoadmapPlan,
 } from '../types/types';
 import trpc from '../trpc';
@@ -83,6 +85,8 @@ export const makeUniquePlanName = (plannerName: string, allPlans: RoadmapPlan[])
   return newName;
 };
 
+const AB_SAVE_DELIMITER = '|';
+
 // remove all unecessary data to store into the database
 export const collapsePlanner = (planner: PlannerData): SavedPlannerYearData[] => {
   const savedPlanner: SavedPlannerYearData[] = [];
@@ -90,7 +94,9 @@ export const collapsePlanner = (planner: PlannerData): SavedPlannerYearData[] =>
     const savedYear: SavedPlannerYearData = { startYear: year.startYear, name: year.name, quarters: [] };
     year.quarters.forEach((quarter) => {
       const savedQuarter: SavedPlannerQuarterData = { name: quarter.name, courses: [] };
-      savedQuarter.courses = quarter.courses.map((course) => course.id);
+      savedQuarter.courses = quarter.courses.map((slot) =>
+        slot.type === 'single' ? slot.course.id : `${slot.a.id}${AB_SAVE_DELIMITER}${slot.b.id}`,
+      );
       savedYear.quarters.push(savedQuarter);
     });
     savedPlanner.push(savedYear);
@@ -110,18 +116,18 @@ export const collapseAllPlanners = (plans: RoadmapPlan[]): SavedPlannerData[] =>
 // query the lost information from collapsing
 
 export const expandPlanner = async (savedPlanner: SavedPlannerYearData[]): Promise<PlannerData> => {
-  let courses: string[] = [];
-  // get all courses in the planner
+  const courseIds: string[] = [];
   savedPlanner.forEach((year) =>
-    year.quarters.forEach((quarter) => {
-      courses = courses.concat(quarter.courses);
-    }),
+    year.quarters.forEach((quarter) =>
+      quarter.courses.forEach((s) => {
+        if (s.includes(AB_SAVE_DELIMITER)) courseIds.push(...s.split(AB_SAVE_DELIMITER));
+        else courseIds.push(s);
+      }),
+    ),
   );
-  // get the course data for all courses
   let courseLookup: BatchCourseData = {};
-  // only send request if there are courses
-  if (courses.length > 0) {
-    courseLookup = await searchAPIResults('courses', courses);
+  if (courseIds.length > 0) {
+    courseLookup = await searchAPIResults('courses', courseIds);
   }
 
   return new Promise((resolve) => {
@@ -133,7 +139,20 @@ export const expandPlanner = async (savedPlanner: SavedPlannerYearData[]): Promi
       savedYear.quarters.forEach((savedQuarter) => {
         const quarter: PlannerQuarterData = { name: savedQuarter.name, courses: [] };
 
-        quarter.courses = savedQuarter.courses.map((courseId) => courseLookup[courseId]).filter((course) => !!course);
+        quarter.courses = savedQuarter.courses
+          .map((s): QuarterSlot | null => {
+            if (s.includes(AB_SAVE_DELIMITER)) {
+              const [id1, id2] = s.split(AB_SAVE_DELIMITER);
+              const a = courseLookup[id1];
+              const b = courseLookup[id2];
+              if (!a || !b) return null;
+              return { type: 'ab', a, b, id: `ab-${a.id}-${b.id}` };
+            }
+            const course = courseLookup[s];
+            if (!course) return null;
+            return { type: 'single', course, id: course.id };
+          })
+          .filter((slot): slot is QuarterSlot => slot !== null);
 
         year.quarters.push(quarter);
       });
@@ -319,26 +338,28 @@ export const validatePlanner = (transferNames: string[], currentPlanData: Planne
   const missing = new Set<string>();
   currentPlanData.forEach((year, yearIndex) => {
     year.quarters.forEach((quarter, quarterIndex) => {
-      const taking: Set<string> = new Set(quarter.courses.map((c) => c.department + ' ' + c.courseNumber));
-      quarter.courses.forEach((course, courseIndex) => {
-        if (!course.prerequisiteTree) return;
+      const taking: Set<string> = new Set(
+        quarter.courses.flatMap((slot) => getSlotCourses(slot).map((c) => c.department + ' ' + c.courseNumber)),
+      );
+      quarter.courses.forEach((slot, courseIndex) => {
+        getSlotCourses(slot).forEach((course) => {
+          if (!course.prerequisiteTree) return;
 
-        const prerequisite = course.prerequisiteTree;
+          const prerequisite = course.prerequisiteTree;
 
-        const incomplete = validatePrerequisites({ taken, prerequisite, taking });
-        if (incomplete.size === 0) return;
+          const incomplete = validatePrerequisites({ taken, prerequisite, taking });
+          if (incomplete.size === 0) return;
 
-        // prerequisite not fulfilled, has some required classes to take
-        invalidCourses.push({
-          location: { yearIndex, quarterIndex, courseIndex },
-          required: Array.from(incomplete),
+          invalidCourses.push({
+            location: { yearIndex, quarterIndex, courseIndex },
+            required: Array.from(incomplete),
+          });
+
+          incomplete.forEach((c) => missing.add(c));
         });
-
-        incomplete.forEach((course) => missing.add(course));
       });
 
-      // after the quarter is over, add the courses into taken
-      taking.forEach((course) => taken.add(course));
+      taking.forEach((c) => taken.add(c));
     });
   });
 
@@ -348,7 +369,9 @@ export const validatePlanner = (transferNames: string[], currentPlanData: Planne
 export const getAllCoursesFromPlan = (plan: RoadmapPlan['content']) => {
   return plan.yearPlans.flatMap((yearPlan) =>
     yearPlan.quarters.flatMap((quarter) =>
-      quarter.courses.map((course) => course.department + ' ' + course.courseNumber),
+      quarter.courses.flatMap((slot) =>
+        getSlotCourses(slot).map((course) => course.department + ' ' + course.courseNumber),
+      ),
     ),
   );
 };

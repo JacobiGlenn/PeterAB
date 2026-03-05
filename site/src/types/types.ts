@@ -29,9 +29,34 @@ export interface PlannerYearData {
   quarters: PlannerQuarterData[];
 }
 
+/** A/B choice: one slot showing two course options; unit total = max(a, b) */
+export interface AbChoiceSlot {
+  type: 'ab';
+  a: CourseGQLData;
+  b: CourseGQLData;
+  id: string;
+}
+
+/** One slot in a quarter: either a single course or an A/B choice. id is for Sortable.js. */
+export type QuarterSlot = { type: 'single'; course: CourseGQLData; id: string } | AbChoiceSlot;
+
+export function isAbChoice(slot: QuarterSlot): slot is AbChoiceSlot {
+  return slot.type === 'ab';
+}
+
+/** All courses in a slot (1 or 2) for iteration/validation */
+export function getSlotCourses(slot: QuarterSlot): CourseGQLData[] {
+  return slot.type === 'single' ? [slot.course] : [slot.a, slot.b];
+}
+
+/** Unit count for a slot: single = course.minUnits, ab = max(a.minUnits, b.minUnits) */
+export function getSlotUnits(slot: QuarterSlot): number {
+  return slot.type === 'single' ? slot.course.minUnits : Math.max(slot.a.minUnits, slot.b.minUnits);
+}
+
 export interface PlannerQuarterData {
   name: QuarterName;
-  courses: CourseGQLData[];
+  courses: QuarterSlot[];
 }
 
 /** @todo delete these identifier traits once everything is in revision */

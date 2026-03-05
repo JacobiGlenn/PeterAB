@@ -1,6 +1,6 @@
 import { QuarterName } from '@peterportal/types';
 import { PlannerEdit, PlannerQuarterEdit, PlannerYearEdit, RoadmapPlan, RoadmapRevision } from '../types/roadmap';
-import { CourseGQLData, PlannerQuarterData, PlannerYearData } from '../types/types';
+import { getSlotCourses, CourseGQLData, PlannerQuarterData, PlannerYearData, QuarterSlot } from '../types/types';
 import { createRevision } from './roadmap';
 import { deepCopy } from './util';
 import { LOADING_COURSE_PLACEHOLDER } from './courseRequirements';
@@ -105,7 +105,7 @@ export function modifyPlannerYear(plannerId: number, currentYear: PlannerYearDat
   return createRevision(edits);
 }
 
-export function addPlannerQuarter(plannerId: number, startYear: number, name: QuarterName, courses: CourseGQLData[]) {
+export function addPlannerQuarter(plannerId: number, startYear: number, name: QuarterName, courses: QuarterSlot[]) {
   const edit: PlannerQuarterEdit = {
     type: 'quarter',
     plannerId,
@@ -149,11 +149,13 @@ export function modifyQuarterCourse(
   if (addedTo) {
     // Remove course loading placeholders
     const quarterCopy = deepCopy(addedTo.quarter);
-    quarterCopy.courses = addedTo.quarter.courses.filter((c) => c.id !== LOADING_COURSE_PLACEHOLDER.id);
+    quarterCopy.courses = addedTo.quarter.courses.filter(
+      (slot) => slot.type !== 'single' || slot.course.id !== LOADING_COURSE_PLACEHOLDER.id,
+    );
 
     const coursesAfter = deepCopy(quarterCopy.courses);
     const index = addedTo.courseIndex;
-    coursesAfter.splice(index, 0, course);
+    coursesAfter.splice(index, 0, { type: 'single', course, id: course.id });
 
     edits.push({
       type: 'quarter',
@@ -167,17 +169,12 @@ export function modifyQuarterCourse(
   return createRevision(edits);
 }
 
-export function reorderQuarterCourse(
-  plannerId: number,
-  course: CourseGQLData,
-  oldIndex: number,
-  after: ModifiedQuarter,
-) {
+export function reorderQuarterCourse(plannerId: number, slot: QuarterSlot, oldIndex: number, after: ModifiedQuarter) {
   const quarterCopy = deepCopy(after.quarter);
 
   const coursesAfter = deepCopy(quarterCopy.courses);
   coursesAfter.splice(oldIndex, 1);
-  coursesAfter.splice(after.courseIndex, 0, course);
+  coursesAfter.splice(after.courseIndex, 0, slot);
 
   const edit: PlannerQuarterEdit = {
     type: 'quarter',
@@ -185,6 +182,145 @@ export function reorderQuarterCourse(
     startYear: after.startYear,
     before: quarterCopy,
     after: { name: after.quarter.name, courses: coursesAfter },
+  };
+  return createRevision([edit]);
+}
+
+/** Replace the slot at slotIndex with an A/B choice (existing course + new course). Use when adding from outside. */
+export function replaceSlotWithAbChoice(
+  plannerId: number,
+  startYear: number,
+  quarter: PlannerQuarterData,
+  slotIndex: number,
+  existingCourse: CourseGQLData,
+  newCourse: CourseGQLData,
+): RoadmapRevision {
+  const quarterCopy = deepCopy(quarter);
+  const coursesAfter = deepCopy(quarterCopy.courses);
+  coursesAfter[slotIndex] = {
+    type: 'ab',
+    a: existingCourse,
+    b: newCourse,
+    id: `ab-${existingCourse.id}-${newCourse.id}`,
+  };
+  const edit: PlannerQuarterEdit = {
+    type: 'quarter',
+    plannerId,
+    startYear,
+    before: quarterCopy,
+    after: { name: quarter.name, courses: coursesAfter },
+  };
+  return createRevision([edit]);
+}
+
+/** Remove the dragged slot and replace the target slot with an A/B choice. Use when reordering within quarter. */
+export function mergeSlotWithDraggedCourse(
+  plannerId: number,
+  startYear: number,
+  quarter: PlannerQuarterData,
+  draggedSlotIndex: number,
+  targetSlotIndex: number,
+  draggedSlot: QuarterSlot,
+): RoadmapRevision {
+  const quarterCopy = deepCopy(quarter);
+  const coursesAfter = deepCopy(quarterCopy.courses);
+  const draggedCourse = getSlotCourses(draggedSlot)[0];
+  coursesAfter.splice(draggedSlotIndex, 1);
+  const newTargetIndex = targetSlotIndex > draggedSlotIndex ? targetSlotIndex - 1 : targetSlotIndex;
+  const targetSlot = coursesAfter[newTargetIndex];
+  const targetCourse = getSlotCourses(targetSlot)[0];
+  coursesAfter[newTargetIndex] = {
+    type: 'ab',
+    a: targetCourse,
+    b: draggedCourse,
+    id: `ab-${targetCourse.id}-${draggedCourse.id}`,
+  };
+  const edit: PlannerQuarterEdit = {
+    type: 'quarter',
+    plannerId,
+    startYear,
+    before: quarterCopy,
+    after: { name: quarter.name, courses: coursesAfter },
+  };
+  return createRevision([edit]);
+}
+
+/** Replace one side of an A/B slot (add from outside). subIndex 0 = left (a), 1 = right (b). */
+export function replaceAbChoiceSub(
+  plannerId: number,
+  startYear: number,
+  quarter: PlannerQuarterData,
+  slotIndex: number,
+  subIndex: 0 | 1,
+  newCourse: CourseGQLData,
+): RoadmapRevision {
+  const quarterCopy = deepCopy(quarter);
+  const slot = quarterCopy.courses[slotIndex];
+  if (slot.type !== 'ab') return createRevision([]);
+  const a = subIndex === 0 ? newCourse : slot.a;
+  const b = subIndex === 1 ? newCourse : slot.b;
+  quarterCopy.courses[slotIndex] = { type: 'ab', a, b, id: `ab-${a.id}-${b.id}` };
+  const edit: PlannerQuarterEdit = {
+    type: 'quarter',
+    plannerId,
+    startYear,
+    before: deepCopy(quarter),
+    after: { name: quarter.name, courses: quarterCopy.courses },
+  };
+  return createRevision([edit]);
+}
+
+/** Swap one side of an A/B slot with a dragged slot (reorder within quarter). */
+export function swapAbChoiceSubWithSlot(
+  plannerId: number,
+  startYear: number,
+  quarter: PlannerQuarterData,
+  targetSlotIndex: number,
+  targetSubIndex: 0 | 1,
+  draggedSlotIndex: number,
+  draggedSlot: QuarterSlot,
+): RoadmapRevision {
+  const quarterCopy = deepCopy(quarter);
+  const coursesAfter = deepCopy(quarterCopy.courses);
+  const targetSlot = coursesAfter[targetSlotIndex];
+  if (targetSlot.type !== 'ab') return createRevision([]);
+  const draggedCourse = getSlotCourses(draggedSlot)[0];
+  const displacedCourse = targetSubIndex === 0 ? targetSlot.a : targetSlot.b;
+  const newA = targetSubIndex === 0 ? draggedCourse : targetSlot.a;
+  const newB = targetSubIndex === 1 ? draggedCourse : targetSlot.b;
+  coursesAfter.splice(draggedSlotIndex, 1);
+  const newTargetIndex = targetSlotIndex > draggedSlotIndex ? targetSlotIndex - 1 : targetSlotIndex;
+  coursesAfter[newTargetIndex] = { type: 'ab', a: newA, b: newB, id: `ab-${newA.id}-${newB.id}` };
+  coursesAfter.splice(draggedSlotIndex, 0, { type: 'single', course: displacedCourse, id: displacedCourse.id });
+  const edit: PlannerQuarterEdit = {
+    type: 'quarter',
+    plannerId,
+    startYear,
+    before: quarterCopy,
+    after: { name: quarter.name, courses: coursesAfter },
+  };
+  return createRevision([edit]);
+}
+
+/** Remove one side of an A/B slot; the other course becomes a single slot. subIndex 0 = remove left (a), 1 = remove right (b). */
+export function removeAbChoiceSub(
+  plannerId: number,
+  startYear: number,
+  quarter: PlannerQuarterData,
+  slotIndex: number,
+  subIndex: 0 | 1,
+): RoadmapRevision {
+  const quarterCopy = deepCopy(quarter);
+  const slot = quarterCopy.courses[slotIndex];
+  if (slot.type !== 'ab') return createRevision([]);
+  const remainingCourse = subIndex === 0 ? slot.b : slot.a;
+  quarterCopy.courses[slotIndex] = { type: 'single', course: remainingCourse, id: remainingCourse.id };
+  const edit: PlannerQuarterEdit = {
+    type: 'quarter',
+    plannerId,
+    startYear,
+    before: deepCopy(quarter),
+    after: { name: quarter.name, courses: quarterCopy.courses },
   };
   return createRevision([edit]);
 }

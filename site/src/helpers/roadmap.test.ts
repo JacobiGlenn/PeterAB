@@ -122,15 +122,11 @@ describe('applyPlannerYearEdit', () => {
     // Create a plan with quarters
     const plannerWithQuarters = deepCopy(plannerA);
     const year = plannerWithQuarters.content.yearPlans[0];
+    const fallCourse = { ...LOADING_COURSE_PLACEHOLDER, id: 'COMPSCI161' };
+    const winterCourse = { ...LOADING_COURSE_PLACEHOLDER, id: 'COMPSCI171' };
     year.quarters = [
-      {
-        name: 'Fall',
-        courses: [{ ...LOADING_COURSE_PLACEHOLDER, id: 'COMPSCI161' }],
-      },
-      {
-        name: 'Winter',
-        courses: [{ ...LOADING_COURSE_PLACEHOLDER, id: 'COMPSCI171' }],
-      },
+      { name: 'Fall', courses: [{ type: 'single', course: fallCourse, id: fallCourse.id }] },
+      { name: 'Winter', courses: [{ type: 'single', course: winterCourse, id: winterCourse.id }] },
     ];
 
     roadmapPlans = [plannerWithQuarters, plannerB];
@@ -210,9 +206,10 @@ describe('applyPlannerQuarterEdit', () => {
   });
 
   it('Removes a quarter from the year when there is no new data', () => {
+    const course122A = { ...LOADING_COURSE_PLACEHOLDER, id: 'COMPSCI122A' };
     const firstQuarterExample: PlannerQuarterData = {
       name: 'Fall',
-      courses: [{ ...LOADING_COURSE_PLACEHOLDER, id: 'COMPSCI122A' }],
+      courses: [{ type: 'single', course: course122A, id: course122A.id }],
     };
     const quarters = roadmapPlans[0].content.yearPlans[0].quarters;
     quarters.push(firstQuarterExample);
