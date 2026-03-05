@@ -5,6 +5,7 @@ import {
   hideMobileCatalog,
   reviseRoadmap,
   selectCurrentPlan,
+  setActiveCourse,
   setShowAddCourse,
 } from '../../../store/slices/roadmapSlice';
 import './AddCoursePopup.scss';
@@ -36,7 +37,10 @@ const AddCoursePopup: FC = () => {
   const quarterIndex = currentYearAndQuarter?.quarter ?? -1;
   const yearIndex = currentYearAndQuarter?.year ?? -1;
 
-  const closePopup = () => dispatch(setShowAddCourse(false));
+  const closePopup = () => {
+    dispatch(setShowAddCourse(false));
+    dispatch(setActiveCourse(null)); // avoid stale activeCourse causing A/B shrink on plain hover
+  };
   const contentClassName = 'add-course-modal ' + (showAddCourse ? 'enter' : 'exit');
   const overlay = <UIOverlay onClick={closePopup} zIndex={499} />;
 

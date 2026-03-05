@@ -119,6 +119,18 @@ div.quarter {
       border-radius: 0;
       @include dragged-quarter-styles();
     }
+
+    // A/B event: shrink + gray when user holds dragged course over this slot's center (Like apple's drop on)
+    // FIXME: should add better anim later so it's more like apple's drop on (Like a lower third would be cool)
+    .quarter-course-slot--ab-target .course {
+      transform: scale(0.9);
+      opacity: 0.7;
+      filter: saturate(0.6);
+      transition:
+        transform 0.15s ease,
+        opacity 0.15s ease,
+        filter 0.15s ease;
+    }
   }
 
   .course {
@@ -161,4 +173,10 @@ body:has(> .profile-popover) {
 body:has(> .sortable-fallback:is(.course, .program-course-tile)) * {
   // when a course is dragged, show grabbing cursor no matter what
   cursor: grabbing !important;
+}
+
+// When hovering over a slot's center (A/B target), hide and collapse the drop-placeholder bar
+// (the bar that snaps to top/bottom) so it takes no space. The dragged clone you're holding stays visible.
+.quarter.quarter--ab-target-active .sortable-ghost {
+  display: none !important;
 }
