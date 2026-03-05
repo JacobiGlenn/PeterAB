@@ -91,7 +91,9 @@ const ImportZot4PlanPopup: FC = () => {
       let problemCount = 0;
       for (const yearPlan of expandedPlanners[0].content.yearPlans) {
         for (const quarter of yearPlan.quarters) {
-          const newCourses = quarter.courses.filter((course) => course != undefined);
+          const newCourses = quarter.courses.filter((slot) =>
+            slot.type === 'single' ? slot.course != null : slot.a != null && slot.b != null,
+          );
           problemCount += quarter.courses.length - newCourses.length;
           quarter.courses = newCourses;
         }

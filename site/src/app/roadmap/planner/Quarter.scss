@@ -119,6 +119,48 @@ div.quarter {
       border-radius: 0;
       @include dragged-quarter-styles();
     }
+
+    // A/B choice slot: two courses in one slot, split side-by-side; shrink font so it fits
+    .quarter-course-slot--ab {
+      display: flex;
+      flex-wrap: nowrap;
+
+      .quarter-course-slot__half {
+        flex: 1 1 0;
+        min-width: 0;
+      }
+
+      .course {
+        font-size: calc(1em - 2px);
+      }
+
+      .warning-container svg {
+        font-size: 14px;
+      }
+    }
+
+    .ab-or-divider {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 4px;
+      font-size: 10px;
+      color: #888;
+    }
+
+    // A/B event: shrink + gray when user holds dragged course over this slot (or sub-slot)
+    .quarter-course-slot--ab-target .course,
+    .quarter-course-slot--ab-target-left .quarter-course-slot__half--a .course,
+    .quarter-course-slot--ab-target-right .quarter-course-slot__half--b .course {
+      transform: scale(0.9);
+      opacity: 0.7;
+      filter: saturate(0.6);
+      transition:
+        transform 0.15s ease,
+        opacity 0.15s ease,
+        filter 0.15s ease;
+    }
   }
 
   .course {
@@ -161,4 +203,10 @@ body:has(> .profile-popover) {
 body:has(> .sortable-fallback:is(.course, .program-course-tile)) * {
   // when a course is dragged, show grabbing cursor no matter what
   cursor: grabbing !important;
+}
+
+// When hovering over a slot's center (A/B target), hide and collapse the drop-placeholder bar
+// (the bar that snaps to top/bottom) so it takes no space. The dragged clone you're holding stays visible.
+.quarter.quarter--ab-target-active .sortable-ghost {
+  display: none !important;
 }

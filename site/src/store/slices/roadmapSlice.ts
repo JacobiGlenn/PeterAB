@@ -136,7 +136,11 @@ export const roadmapSlice = createSlice({
       const target = action.payload;
       const yearPlans = state.plans[state.currentPlanIndex].content.yearPlans;
       const quarter = yearPlans[target.yearIndex].quarters[target.quarterIndex];
-      quarter.courses.splice(target.courseIndex, 0, LOADING_COURSE_PLACEHOLDER);
+      quarter.courses.splice(target.courseIndex, 0, {
+        type: 'single',
+        course: LOADING_COURSE_PLACEHOLDER,
+        id: LOADING_COURSE_PLACEHOLDER.id,
+      });
     },
     setInvalidCourses: (state, action: PayloadAction<InvalidCourseData[]>) => {
       state.plans[state.currentPlanIndex].content.invalidCourses = action.payload;

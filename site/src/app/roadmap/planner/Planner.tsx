@@ -18,16 +18,15 @@ const Planner: FC = () => {
 
   const calculatePlannerOverviewStats = () => {
     let unitCount = 0;
-    let courseCount = 0;
-    // sum up all courses
-    const courses = currentPlanData.flatMap((year) => year.quarters).flatMap((q) => q.courses);
-    courses.forEach((course) => {
-      unitCount += course.minUnits;
-      courseCount++;
+    let slotCount = 0;
+    const slots = currentPlanData.flatMap((year) => year.quarters).flatMap((q) => q.courses);
+    slots.forEach((slot) => {
+      unitCount += slot.type === 'single' ? slot.course.minUnits : Math.max(slot.a.minUnits, slot.b.minUnits);
+      slotCount++;
     });
 
     // add in transfer courses
-    courseCount += transferred.courses.length;
+    const courseCount = slotCount + transferred.courses.length;
     unitCount += getTotalUnitsFromTransfers(transferred.courses, transferred.ap, transferred.ge, transferred.other);
     return { unitCount, courseCount };
   };
