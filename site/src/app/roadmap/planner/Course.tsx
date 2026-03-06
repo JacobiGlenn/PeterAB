@@ -23,7 +23,6 @@ interface CourseNameAndInfoProps {
   popupListener?: (open: boolean) => void;
   openPopoverLeft?: boolean;
   requiredCourses?: string[];
-  /** Whether to always collapse whitespace in the course name */
   alwaysCollapse?: boolean;
 }
 export const CourseNameAndInfo: React.FC<CourseNameAndInfoProps> = (props) => {
@@ -76,7 +75,7 @@ interface CourseProps {
   openPopoverLeft?: boolean;
   addMode?: 'tap' | 'drag';
   data: CourseGQLData;
-  /** Optional: visual variant for drag handle (e.g., mini handle for right side of A/B slot) */
+  // Optional: visual variant for drag handle (e.g., mini handle for right side of A/B slot)
   dragVariant?: 'normal' | 'mini-right';
 }
 

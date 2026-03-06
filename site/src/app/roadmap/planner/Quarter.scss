@@ -295,6 +295,7 @@ body:has(> .sortable-fallback:is(.course, .program-course-tile)) * {
 
 // When hovering over a slot's center (A/B target), hide and collapse the drop-placeholder bar
 // (the bar that snaps to top/bottom) so it takes no space. The dragged clone you're holding stays visible.
+// blocking normal reorder behavior so it looks like the course is being dragged INTO the slot
 .quarter.quarter--ab-target-active .sortable-ghost {
   display: none !important;
 }

@@ -186,7 +186,6 @@ export function reorderQuarterCourse(plannerId: number, slot: QuarterSlot, oldIn
   return createRevision([edit]);
 }
 
-/** Move an entire slot (single or A/B) from one quarter to another (or between different years). */
 export function moveQuarterSlot(plannerId: number, from: ModifiedQuarter, to: ModifiedQuarter): RoadmapRevision {
   const edits: PlannerQuarterEdit[] = [];
 
@@ -225,7 +224,7 @@ export function moveQuarterSlot(plannerId: number, from: ModifiedQuarter, to: Mo
   return createRevision(edits);
 }
 
-/** Replace the slot at slotIndex with an A/B choice (existing course + new course). Use when adding from outside. */
+// Replace the slot at slotIndex with an A/B choice (existing course (A) + new course (B)) for adding from outside NOT same quarter
 export function replaceSlotWithAbChoice(
   plannerId: number,
   startYear: number,
@@ -256,6 +255,7 @@ export function replaceSlotWithAbChoice(
  * Remove the dragged course from the source quarter and replace the target slot with an A/B choice.
  * Use when dragging from one quarter and dropping on a course in another to merge.
  */
+
 export function removeFromSourceAndReplaceSlotWithAbChoice(
   plannerId: number,
   source: ModifiedQuarter,
@@ -334,7 +334,7 @@ export function removeFromSourceAndReplaceAbChoiceSub(
   return createRevision(edits);
 }
 
-/** Remove the dragged slot and replace the target slot with an A/B choice. Use when reordering within quarter. */
+// Remove the dragged slot and replace the target slot with an A/B choice; Use when reordering within quarter
 export function mergeSlotWithDraggedCourse(
   plannerId: number,
   startYear: number,
@@ -366,7 +366,7 @@ export function mergeSlotWithDraggedCourse(
   return createRevision([edit]);
 }
 
-/** Replace one side of an A/B slot (add from outside). subIndex 0 = left (a), 1 = right (b). */
+// Replace one side of an A/B slot (add from outside). 0 = left (a) 1 = right (b)
 export function replaceAbChoiceSub(
   plannerId: number,
   startYear: number,
@@ -391,7 +391,7 @@ export function replaceAbChoiceSub(
   return createRevision([edit]);
 }
 
-/** Swap one side of an A/B slot with a dragged slot (reorder within quarter). */
+// Swap one side of an A/B slot with a dragged slot (reorder within quarter)
 export function swapAbChoiceSubWithSlot(
   plannerId: number,
   startYear: number,
@@ -423,7 +423,7 @@ export function swapAbChoiceSubWithSlot(
   return createRevision([edit]);
 }
 
-/** Swap the two courses in an A/B slot (A|B → B|A). */
+// Swap the two courses in an A/B slot (A|B → B|A) (uses the ui kit swap icon on hover)
 export function swapAbChoiceInSlot(
   plannerId: number,
   startYear: number,
@@ -450,7 +450,7 @@ export function swapAbChoiceInSlot(
   return createRevision([edit]);
 }
 
-/** Split an A/B slot into two single slots (A, B) in place. Use on 4-dot press so B becomes a normal course. */
+// Split an A/B slot into two single slots (A, B) in place. Use a  4-dot press so B becomes a normal course (split in place)
 export function splitAbChoiceIntoSingles(
   plannerId: number,
   startYear: number,
@@ -477,7 +477,7 @@ export function splitAbChoiceIntoSingles(
   return createRevision([edit]);
 }
 
-/** Remove one side of an A/B slot; the other course becomes a single slot. subIndex 0 = remove left (a), 1 = remove right (b). */
+// Remove one side of an A/B slot; the other course becomes a single slot.
 export function removeAbChoiceSub(
   plannerId: number,
   startYear: number,
@@ -544,7 +544,7 @@ export function pullOutAbRightAndInsert(
 }
 
 /**
- * Same-quarter "pull out right": replace A/B at oldIndex with single A, insert single B at newIndex.
+ * Same-quarter "pull out right": replace A/B at oldIndex with single B, insert single A at newIndex.
  * (We block Sortable moves for 4-dot, so the slot never actually moves; this just rewrites the quarter.)
  */
 export function pullOutAbRightSameQuarter(
@@ -559,9 +559,9 @@ export function pullOutAbRightSameQuarter(
   const { a: leftCourse, b: rightCourse } = slot;
   const quarterCopy = deepCopy(quarter);
   const coursesAfter = deepCopy(quarterCopy.courses);
-  coursesAfter[oldIndex] = { type: 'single', course: leftCourse, id: leftCourse.id };
+  coursesAfter[oldIndex] = { type: 'single', course: rightCourse, id: rightCourse.id };
   const insertAt = newIndex === oldIndex ? oldIndex + 1 : newIndex;
-  coursesAfter.splice(insertAt, 0, { type: 'single', course: rightCourse, id: rightCourse.id });
+  coursesAfter.splice(insertAt, 0, { type: 'single', course: leftCourse, id: leftCourse.id });
   const edit: PlannerQuarterEdit = {
     type: 'quarter',
     plannerId,
