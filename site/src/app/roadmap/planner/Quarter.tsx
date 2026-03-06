@@ -158,10 +158,19 @@ const QuarterCourseSlot: FC<QuarterCourseSlotProps> = ({
             className={`ab-or-divider ${onSwapAbAt ? 'ab-or-divider--swappable' : ''}`}
             role={onSwapAbAt ? 'button' : undefined}
             tabIndex={onSwapAbAt ? 0 : undefined}
+            onPointerDown={
+              onSwapAbAt
+                ? (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }
+                : undefined
+            }
             onClick={
               onSwapAbAt
                 ? (e) => {
                     e.stopPropagation();
+                    e.preventDefault();
                     onSwapAbAt(index);
                   }
                 : undefined
