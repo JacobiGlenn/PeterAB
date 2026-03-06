@@ -27,6 +27,24 @@
     }
   }
 
+  .course-drag-handle--mini-right {
+    left: -2px;
+  }
+
+  .drag-dots-mini {
+    display: grid;
+    grid-template-columns: repeat(2, 4px);
+    grid-template-rows: repeat(2, 4px);
+    gap: 2px;
+  }
+
+  .drag-dots-mini span {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background-color: var(--mui-palette-secondary-main);
+  }
+
   .course-and-info {
     grid-area: B;
   }

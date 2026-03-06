@@ -12,6 +12,7 @@ export const quarterSortable: SortableOptions & Partial<ReactSortableProps<Quart
   ...baseSortable,
   setList: () => {},
   handle: '.course-drag-handle',
+  draggable: '.quarter-course-slot-wrapper',
   group: { name: 'courses' },
 };
 

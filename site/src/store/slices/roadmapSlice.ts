@@ -70,6 +70,14 @@ export const roadmapSlice = createSlice({
     activeMissingPrerequisites: undefined as string[] | undefined,
     /** Where the active course is being dragged from */
     activeCourseDragSource: null as Omit<SetActiveCoursePayload, 'course'> | null,
+    /** During 4-dot drag: quarter + slot index under the pointer; mergeIntoSlot/mergeSub when over slot center */
+    abDropTarget: null as {
+      yearIndex: number;
+      quarterIndex: number;
+      slotIndex: number;
+      mergeIntoSlot?: boolean;
+      mergeSub?: 0 | 1;
+    } | null,
     /** Whether the roadmap is loading */
     roadmapLoading: true,
     toastMsg: '',
@@ -115,12 +123,18 @@ export const roadmapSlice = createSlice({
 
     setActiveCourse: (state, action: PayloadAction<SetActiveCoursePayload | null>) => {
       if (!action.payload) {
-        state.activeCourse = state.activeCourseDragSource = null;
+        state.activeCourse = state.activeCourseDragSource = state.abDropTarget = null;
         return;
       }
       const { course, ...dragSource } = action.payload;
       state.activeCourse = course;
       state.activeCourseDragSource = dragSource.quarter ? dragSource : null;
+    },
+    setAbDropTarget: (
+      state,
+      action: PayloadAction<{ yearIndex: number; quarterIndex: number; slotIndex: number } | null>,
+    ) => {
+      state.abDropTarget = action.payload;
     },
     setActiveCourseLoading: (state, action: PayloadAction<boolean>) => {
       state.activeCourseLoading = action.payload;
@@ -196,6 +210,7 @@ export const roadmapSlice = createSlice({
 
 export const {
   createQuarterCourseLoadingPlaceholder,
+  setAbDropTarget,
   setActiveCourse,
   setActiveCourseLoading,
   setActiveMissingPrerequisites,

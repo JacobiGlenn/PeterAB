@@ -120,10 +120,14 @@ div.quarter {
       @include dragged-quarter-styles();
     }
 
-    // A/B choice slot: two courses in one slot, split side-by-side; shrink font so it fits
+    // A/B choice slot: two courses side-by-side
     .quarter-course-slot--ab {
       display: flex;
       flex-wrap: nowrap;
+
+      .quarter-course-slot__ab-ghost-card {
+        display: none;
+      }
 
       .quarter-course-slot__half {
         flex: 1 1 0;
@@ -137,6 +141,16 @@ div.quarter {
       .warning-container svg {
         font-size: 14px;
       }
+
+      .quarter-course-slot__half--b .course-drag-handle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .quarter-course-slot__half--b .course-drag-handle svg {
+        font-size: 14px;
+      }
     }
 
     .ab-or-divider {
@@ -145,8 +159,23 @@ div.quarter {
       align-items: center;
       justify-content: center;
       padding: 0 4px;
-      font-size: 10px;
+      font-size: 12px;
       color: #888;
+
+      &--swappable {
+        cursor: pointer;
+
+        .ab-or-divider__swap {
+          display: none;
+          font-size: 12px;
+        }
+        &:hover .ab-or-divider__text {
+          display: none;
+        }
+        &:hover .ab-or-divider__swap {
+          display: inline-flex;
+        }
+      }
     }
 
     // A/B event: shrink + gray when user holds dragged course over this slot (or sub-slot)
@@ -160,6 +189,65 @@ div.quarter {
         transform 0.15s ease,
         opacity 0.15s ease,
         filter 0.15s ease;
+    }
+
+    // When dragging an A/B slot (left handle = both), show the ghost card (same style as single course).
+    .quarter-course-slot-wrapper.sortable-fallback .quarter-course-slot--ab .quarter-course-slot__half,
+    .quarter-course-slot-wrapper.sortable-fallback .quarter-course-slot--ab .ab-or-divider {
+      display: none;
+    }
+
+    .quarter-course-slot-wrapper.sortable-fallback .quarter-course-slot--ab .quarter-course-slot__ab-ghost-card {
+      display: grid;
+      grid-template-columns: min-content 1fr;
+      grid-template-areas: 'handle content';
+      align-items: center;
+      gap: 0 8px;
+      color: var(--mui-palette-secondary-main);
+      box-shadow: none;
+      border: 1px solid var(--border-secondary);
+      background: var(--mui-palette-overlay-overlay1);
+      border-radius: 4px;
+      padding: 12px;
+      margin: 4px;
+      pointer-events: none;
+      font-size: 14px;
+
+      .course-drag-handle {
+        grid-area: handle;
+        cursor: grab;
+        color: inherit;
+      }
+      .quarter-course-slot__ab-ghost-card-top {
+        grid-area: content;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      .quarter-course-slot__ab-ghost-names {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+        .name {
+          font-weight: bold;
+          color: var(--mui-palette-secondary-main);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+      }
+      .units {
+        margin-left: auto;
+        flex-shrink: 0;
+        color: inherit;
+      }
+      .course-delete-btn {
+        flex-shrink: 0;
+        color: inherit;
+      }
     }
   }
 
@@ -209,4 +297,63 @@ body:has(> .sortable-fallback:is(.course, .program-course-tile)) * {
 // (the bar that snaps to top/bottom) so it takes no space. The dragged clone you're holding stays visible.
 .quarter.quarter--ab-target-active .sortable-ghost {
   display: none !important;
+}
+
+// With fallbackOnBody: true, the drag clone is appended to <body>, not inside .quarter, so the rules
+// above (nested under .quarter .quarter-course-list) never match the ghost. Duplicate them globally.
+.quarter-course-slot-wrapper.sortable-fallback .quarter-course-slot--ab .quarter-course-slot__half,
+.quarter-course-slot-wrapper.sortable-fallback .quarter-course-slot--ab .ab-or-divider {
+  display: none;
+}
+.quarter-course-slot-wrapper.sortable-fallback .quarter-course-slot--ab .quarter-course-slot__ab-ghost-card {
+  display: grid;
+  grid-template-columns: min-content 1fr;
+  grid-template-areas: 'handle content';
+  align-items: center;
+  gap: 0 8px;
+  color: var(--mui-palette-secondary-main);
+  box-shadow: none;
+  border: 1px solid var(--border-secondary);
+  background: var(--mui-palette-overlay-overlay1);
+  border-radius: 4px;
+  padding: 12px;
+  margin: 4px;
+  pointer-events: none;
+  font-size: 14px;
+
+  .course-drag-handle {
+    grid-area: handle;
+    cursor: grab;
+    color: inherit;
+  }
+  .quarter-course-slot__ab-ghost-card-top {
+    grid-area: content;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .quarter-course-slot__ab-ghost-names {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    .name {
+      font-weight: bold;
+      color: var(--mui-palette-secondary-main);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+  .units {
+    margin-left: auto;
+    flex-shrink: 0;
+    color: inherit;
+  }
+  .course-delete-btn {
+    flex-shrink: 0;
+    color: inherit;
+  }
 }
