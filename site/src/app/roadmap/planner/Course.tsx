@@ -76,11 +76,13 @@ interface CourseProps {
   openPopoverLeft?: boolean;
   addMode?: 'tap' | 'drag';
   data: CourseGQLData;
+  /** Optional: visual variant for drag handle (e.g., mini handle for right side of A/B slot) */
+  dragVariant?: 'normal' | 'mini-right';
 }
 
 const Course: FC<CourseProps> = (props) => {
   const { title, courseLevel, minUnits, maxUnits, terms, geList } = props.data;
-  const { requiredCourses, onDelete, openPopoverLeft } = props;
+  const { requiredCourses, onDelete, openPopoverLeft, dragVariant = 'normal' } = props;
 
   const isInRoadmap = !!onDelete;
   const isMobile = useIsMobile();
@@ -108,8 +110,17 @@ const Course: FC<CourseProps> = (props) => {
   return (
     <div className={`course ${isInRoadmap ? 'roadmap-course' : ''}`} {...tappableCourseProps}>
       {(!isMobile || isInRoadmap) && (
-        <div className="course-drag-handle">
-          <DragIndicatorIcon />
+        <div className={`course-drag-handle ${dragVariant === 'mini-right' ? 'course-drag-handle--mini-right' : ''}`}>
+          {dragVariant === 'mini-right' ? (
+            <span className="drag-dots-mini">
+              <span />
+              <span />
+              <span />
+              <span />
+            </span>
+          ) : (
+            <DragIndicatorIcon />
+          )}
         </div>
       )}
 

@@ -25,15 +25,23 @@ import { ReactSortable, SortableEvent } from 'react-sortablejs';
 import { quarterSortable } from '../../../helpers/sortable';
 
 import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
-import { Button, Card } from '@mui/material';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import { Button, Card, IconButton } from '@mui/material';
 import {
   mergeSlotWithDraggedCourse,
   ModifiedQuarter,
   modifyQuarterCourse,
+  moveQuarterSlot,
   reorderQuarterCourse,
   removeAbChoiceSub,
+  removeFromSourceAndReplaceAbChoiceSub,
+  removeFromSourceAndReplaceSlotWithAbChoice,
   replaceAbChoiceSub,
   replaceSlotWithAbChoice,
+  splitAbChoiceIntoSingles,
+  swapAbChoiceInSlot,
   swapAbChoiceSubWithSlot,
 } from '../../../helpers/roadmapEdits';
 
@@ -56,6 +64,11 @@ const REORDER_DELAY_REORDER_MS = 135;
 // Shared: true only while mouse/touch is physically pressed (button down or finger on screen)
 const isPointerDownRef = { current: false };
 
+/** Per-quarter handlers for 4-dot split; key = "yearIndex-quarterIndex" */
+const splitAbHandlersRef = {
+  current: {} as Record<string, (slotIndex: number) => void>,
+};
+
 // slot for a course in a quarter (single or A/B choice)
 // isAbTargetSub: when A/B slot, 0 = shrink left only, 1 = shrink right only; null = shrink both (single-slot target)
 interface QuarterCourseSlotProps {
@@ -66,6 +79,7 @@ interface QuarterCourseSlotProps {
   invalidCourses: InvalidCourseData[];
   removeCourseAt: (index: number) => void;
   removeAbSubAt?: (index: number, subIndex: 0 | 1) => void;
+  onSwapAbAt?: (index: number) => void;
   isAbTarget?: boolean;
   isAbTargetSub?: 0 | 1 | null;
 }
@@ -78,6 +92,7 @@ const QuarterCourseSlot: FC<QuarterCourseSlotProps> = ({
   invalidCourses,
   removeCourseAt,
   removeAbSubAt,
+  onSwapAbAt,
   isAbTarget = false,
   isAbTargetSub = null,
 }) => {
@@ -101,22 +116,79 @@ const QuarterCourseSlot: FC<QuarterCourseSlotProps> = ({
         ? 'quarter-course-slot--ab-target'
         : '';
 
+  const abGhostMaxUnits = isAb ? getSlotUnits(slot) : 0;
+
   return (
     <div className={`quarter-course-slot ${isAb ? 'quarter-course-slot--ab' : ''} ${targetClass}`}>
       {isAb ? (
         <>
+          <div className="quarter-course-slot__ab-ghost-label quarter-course-slot__ab-ghost-card">
+            <div className="course-drag-handle">
+              <DragIndicatorIcon />
+            </div>
+            <div className="quarter-course-slot__ab-ghost-card-top">
+              <div className="quarter-course-slot__ab-ghost-names">
+                <span className="name">
+                  {slot.a.department} {slot.a.courseNumber}
+                </span>
+                <span className="name">
+                  {slot.b.department} {slot.b.courseNumber}
+                </span>
+              </div>
+              <span className="units">
+                {abGhostMaxUnits} unit{pluralize(abGhostMaxUnits)}
+              </span>
+              <IconButton className="course-delete-btn" aria-hidden tabIndex={-1} size="small">
+                <DeleteOutlineIcon className="course-delete-icon" />
+              </IconButton>
+            </div>
+          </div>
           <div className="quarter-course-slot__half quarter-course-slot__half--a">
             <Course
               key="a"
               data={slot.a}
               requiredCourses={requiredCourses}
               onDelete={removeAbSubAt ? () => removeAbSubAt(index, 0) : () => removeCourseAt(index)}
+              dragVariant="normal"
               addMode="drag"
               openPopoverLeft
             />
           </div>
-          <div className="ab-or-divider" aria-hidden>
-            or
+          <div
+            className={`ab-or-divider ${onSwapAbAt ? 'ab-or-divider--swappable' : ''}`}
+            role={onSwapAbAt ? 'button' : undefined}
+            tabIndex={onSwapAbAt ? 0 : undefined}
+            onPointerDown={
+              onSwapAbAt
+                ? (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }
+                : undefined
+            }
+            onClick={
+              onSwapAbAt
+                ? (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    onSwapAbAt(index);
+                  }
+                : undefined
+            }
+            onKeyDown={
+              onSwapAbAt
+                ? (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onSwapAbAt(index);
+                    }
+                  }
+                : undefined
+            }
+            aria-label={onSwapAbAt ? 'Swap courses' : undefined}
+          >
+            <span className="ab-or-divider__text">or</span>
+            {onSwapAbAt && <SwapHorizIcon className="ab-or-divider__swap" fontSize="small" />}
           </div>
           <div className="quarter-course-slot__half quarter-course-slot__half--b">
             <Course
@@ -124,6 +196,7 @@ const QuarterCourseSlot: FC<QuarterCourseSlotProps> = ({
               data={slot.b}
               requiredCourses={requiredCourses}
               onDelete={removeAbSubAt ? () => removeAbSubAt(index, 1) : () => removeCourseAt(index)}
+              dragVariant="mini-right"
               addMode="drag"
               openPopoverLeft
             />
@@ -167,6 +240,11 @@ const Quarter: FC<QuarterProps> = ({ yearIndex, quarterIndex, data }) => {
     activeCourseDraggedFrom.startYear === startYear &&
     activeCourseDraggedFrom.quarter?.name === data.name;
 
+  const isDraggingAbSlot =
+    activeCourseDraggedFrom?.quarter != null &&
+    typeof activeCourseDraggedFrom.courseIndex === 'number' &&
+    activeCourseDraggedFrom.quarter.courses[activeCourseDraggedFrom.courseIndex]?.type === 'ab';
+
   // The confirmed A/B target: slot index and, for A/B slots, which half (0=left, 1=right; null=whole slot)
   const [abTargetSlotIndex, setAbTargetSlotIndex] = useState<number | null>(null);
   const [abTargetSubIndex, setAbTargetSubIndex] = useState<0 | 1 | null>(null);
@@ -177,6 +255,92 @@ const Quarter: FC<QuarterProps> = ({ yearIndex, quarterIndex, data }) => {
 
   // Refs to each slot element
   const slotRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  // 4-dot press: split A|B into two single slots; prevents Sortable from starting a drag on the A|B slot
+  useEffect(() => {
+    const key = `${yearIndex}-${quarterIndex}`;
+    splitAbHandlersRef.current[key] = (slotIndex: number) => {
+      const revision = splitAbChoiceIntoSingles(currentPlan.id, startYear, data, slotIndex);
+      dispatch(reviseRoadmap(revision));
+    };
+    return () => {
+      delete splitAbHandlersRef.current[key];
+    };
+  }, [currentPlan.id, data, dispatch, startYear, yearIndex, quarterIndex]);
+
+  useEffect(() => {
+    const onPointerDownCapture = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest?.('.course-drag-handle--mini-right')) {
+        const wrapper = target.closest?.('.quarter-course-slot-wrapper') as HTMLElement | null;
+        const quarter = wrapper?.closest?.('.quarter[data-year-index][data-quarter-index]') as HTMLElement | null;
+        if (wrapper && quarter) {
+          const yi = parseInt(quarter.getAttribute('data-year-index') ?? '', 10);
+          const qi = parseInt(quarter.getAttribute('data-quarter-index') ?? '', 10);
+          const slotIndex = parseInt(wrapper.getAttribute('data-slot-index') ?? '', 10);
+          if (!isNaN(yi) && !isNaN(qi) && !isNaN(slotIndex)) {
+            const handler = splitAbHandlersRef.current[`${yi}-${qi}`];
+            handler?.(slotIndex);
+            e.preventDefault();
+            e.stopPropagation();
+            // After split, B is at slotIndex+1; programmatically start drag on B so user keeps holding it
+            const clientX = 'touches' in e ? (e as TouchEvent).touches[0].clientX : (e as MouseEvent).clientX;
+            const clientY = 'touches' in e ? (e as TouchEvent).touches[0].clientY : (e as MouseEvent).clientY;
+            const isTouch = 'touches' in e;
+            setTimeout(() => {
+              const list = document.querySelector(
+                `.quarter[data-year-index="${yi}"][data-quarter-index="${qi}"] .quarter-course-list`,
+              );
+              const wrappers = list?.querySelectorAll('.quarter-course-slot-wrapper');
+              const bWrapper = wrappers?.[slotIndex + 1] as HTMLElement | undefined;
+              const handle = bWrapper?.querySelector('.course-drag-handle') as HTMLElement | null;
+              if (handle) {
+                if (isTouch) {
+                  const touch = new Touch({
+                    identifier: Date.now(),
+                    target: handle,
+                    clientX,
+                    clientY,
+                    radiusX: 0,
+                    radiusY: 0,
+                    rotationAngle: 0,
+                    force: 1,
+                  });
+                  handle.dispatchEvent(
+                    new TouchEvent('touchstart', {
+                      cancelable: true,
+                      bubbles: true,
+                      touches: [touch],
+                      targetTouches: [touch],
+                      changedTouches: [touch],
+                    }),
+                  );
+                } else {
+                  handle.dispatchEvent(
+                    new MouseEvent('mousedown', {
+                      bubbles: true,
+                      cancelable: true,
+                      view: window,
+                      clientX,
+                      clientY,
+                      button: 0,
+                      buttons: 1,
+                    }),
+                  );
+                }
+              }
+            }, 0);
+          }
+        }
+      }
+    };
+    document.addEventListener('mousedown', onPointerDownCapture, true);
+    document.addEventListener('touchstart', onPointerDownCapture, true);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDownCapture, true);
+      document.removeEventListener('touchstart', onPointerDownCapture, true);
+    };
+  }, []);
 
   // Timer used to detect whether the user has hovered a slot long enough to trigger A/B event
   const abTargetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -218,6 +382,14 @@ const Quarter: FC<QuarterProps> = ({ yearIndex, quarterIndex, data }) => {
   const removeAbSubAt = useCallback(
     (index: number, subIndex: 0 | 1) => {
       const revision = removeAbChoiceSub(currentPlan.id, startYear, data, index, subIndex);
+      dispatch(reviseRoadmap(revision));
+    },
+    [currentPlan.id, data, dispatch, startYear],
+  );
+
+  const swapAbAt = useCallback(
+    (index: number) => {
+      const revision = swapAbChoiceInSlot(currentPlan.id, startYear, data, index);
       dispatch(reviseRoadmap(revision));
     },
     [currentPlan.id, data, dispatch, startYear],
@@ -267,6 +439,13 @@ const Quarter: FC<QuarterProps> = ({ yearIndex, quarterIndex, data }) => {
 
     const checkPointer = (clientX: number, clientY: number) => {
       if (!isPointerDownRef.current) return; // only run while actually holding
+      if (isDraggingAbSlot) {
+        // Never show A/B target or run merge logic when dragging an A/B slot
+        clearTimer();
+        setAbTargetSlotIndex(null);
+        setAbTargetSubIndex(null);
+        return;
+      }
       const n = data.courses.length;
       let foundCenterIndex: number | null = null;
       let foundSubIndex: 0 | 1 | null = null;
@@ -374,9 +553,17 @@ const Quarter: FC<QuarterProps> = ({ yearIndex, quarterIndex, data }) => {
       clearTimer();
       clearReorderDelay();
     };
-  }, [isPhysicalDrag, data.courses.length, isReorderingWithinQuarter, activeCourseDraggedFrom?.courseIndex]);
+  }, [
+    dispatch,
+    isPhysicalDrag,
+    data.courses,
+    isReorderingWithinQuarter,
+    activeCourseDraggedFrom?.courseIndex,
+    isDraggingAbSlot,
+  ]);
 
   const handleSortableMove = useCallback(() => {
+    if (isDraggingAbSlot) return true; // never block or merge when dragging A/B slot
     const centerZone = isReorderingWithinQuarter ? CENTER_ZONE_REORDER : CENTER_ZONE_ADD;
     const { x: clientX, y: clientY } = pointerPosRef.current;
     const n = data.courses.length;
@@ -395,29 +582,63 @@ const Quarter: FC<QuarterProps> = ({ yearIndex, quarterIndex, data }) => {
       return reorderAllowedRef.current; // top/bottom zone → allow only after delay
     }
     return true; // not over any slot → allow default behavior
-  }, [data.courses.length, isReorderingWithinQuarter, activeCourseDraggedFrom?.courseIndex]);
+  }, [data.courses.length, isReorderingWithinQuarter, activeCourseDraggedFrom?.courseIndex, isDraggingAbSlot]);
 
   const addCourse = async (event: SortableEvent) => {
     const targetIndex = abTargetSlotIndexRef.current;
     const targetSubIndex = abTargetSubIndexRef.current;
+    const sourceQuarter = (activeCourseDraggedFrom ?? null) as ModifiedQuarter | null;
     if (targetIndex !== null && targetIndex !== undefined && !activeCourseLoading && activeCourse) {
       const targetSlot = data.courses[targetIndex];
       if (targetSlot.type === 'ab' && targetSubIndex !== null && targetSubIndex !== undefined) {
-        const revision = replaceAbChoiceSub(currentPlan.id, startYear, data, targetIndex, targetSubIndex, activeCourse);
-        dispatch(reviseRoadmap(revision));
+        if (sourceQuarter) {
+          const revision = removeFromSourceAndReplaceAbChoiceSub(
+            currentPlan.id,
+            sourceQuarter,
+            data,
+            startYear,
+            targetIndex,
+            targetSubIndex,
+            activeCourse,
+          );
+          dispatch(reviseRoadmap(revision));
+        } else {
+          const revision = replaceAbChoiceSub(
+            currentPlan.id,
+            startYear,
+            data,
+            targetIndex,
+            targetSubIndex,
+            activeCourse,
+          );
+          dispatch(reviseRoadmap(revision));
+        }
         dispatch(setActiveCourse(null));
         return;
       }
       const existingCourse = getSlotCourses(targetSlot)[0];
-      const revision = replaceSlotWithAbChoice(
-        currentPlan.id,
-        startYear,
-        data,
-        targetIndex,
-        existingCourse,
-        activeCourse,
-      );
-      dispatch(reviseRoadmap(revision));
+      if (sourceQuarter) {
+        const revision = removeFromSourceAndReplaceSlotWithAbChoice(
+          currentPlan.id,
+          sourceQuarter,
+          data,
+          startYear,
+          targetIndex,
+          existingCourse,
+          activeCourse,
+        );
+        dispatch(reviseRoadmap(revision));
+      } else {
+        const revision = replaceSlotWithAbChoice(
+          currentPlan.id,
+          startYear,
+          data,
+          targetIndex,
+          existingCourse,
+          activeCourse,
+        );
+        dispatch(reviseRoadmap(revision));
+      }
       dispatch(setActiveCourse(null));
       return;
     }
@@ -429,13 +650,29 @@ const Quarter: FC<QuarterProps> = ({ yearIndex, quarterIndex, data }) => {
       return;
     }
 
-    const sourceQuarter = (activeCourseDraggedFrom ?? null) as ModifiedQuarter | null;
+    // If the course is being dragged from another quarter in the roadmap
+    if (sourceQuarter) {
+      const movedSlot = sourceQuarter.quarter.courses[sourceQuarter.courseIndex];
+      if (movedSlot) {
+        const addToQuarter: ModifiedQuarter = {
+          startYear,
+          quarter: data,
+          courseIndex: event.newIndex!,
+        };
+        const revision = moveQuarterSlot(currentPlan.id, sourceQuarter, addToQuarter);
+        dispatch(reviseRoadmap(revision));
+        dispatch(setActiveCourse(null));
+        return;
+      }
+    }
+
+    // Otherwise, this is a course coming from outside (catalog/requirements); add as a new single.
     const addToQuarter: ModifiedQuarter = {
       startYear,
       quarter: data,
       courseIndex: event.newIndex!,
     };
-    const revision = modifyQuarterCourse(currentPlan.id, activeCourse!, sourceQuarter, addToQuarter);
+    const revision = modifyQuarterCourse(currentPlan.id, activeCourse!, null, addToQuarter);
     dispatch(reviseRoadmap(revision));
   };
 
@@ -479,9 +716,10 @@ const Quarter: FC<QuarterProps> = ({ yearIndex, quarterIndex, data }) => {
   ]);
 
   const setDraggedItem = (event: SortableEvent) => {
-    const slot = data.courses[event.oldIndex!];
+    const slotIndex = event.oldIndex!;
+    const slot = data.courses[slotIndex];
     const course = getSlotCourses(slot)[0];
-    dispatch(setActiveCourse({ course, startYear, quarter: data, courseIndex: event.oldIndex! }));
+    dispatch(setActiveCourse({ course, startYear, quarter: data, courseIndex: slotIndex }));
   };
 
   return (
@@ -489,6 +727,8 @@ const Quarter: FC<QuarterProps> = ({ yearIndex, quarterIndex, data }) => {
       className={`quarter ${abTargetSlotIndex != null && !isReorderingWithinQuarter ? 'quarter--ab-target-active' : ''}`}
       ref={quarterContainerRef}
       variant="outlined"
+      data-year-index={yearIndex}
+      data-quarter-index={quarterIndex}
     >
       <div className="quarter-header">
         <h2 className="quarter-title">{quarterTitle.replace('10 Week', '10wk')}</h2>
@@ -515,13 +755,15 @@ const Quarter: FC<QuarterProps> = ({ yearIndex, quarterIndex, data }) => {
         onAdd={addCourse}
         onSort={sortCourse}
         onMove={handleSortableMove}
-        onEnd={() => {
-          // When we block the move (center zone), onSort may not fire. Handle both A/B creation
-          // (drop on single slot) and A/B sub-swap (drop on left/right of existing A/B) here.
+        onEnd={(evt: SortableEvent) => {
+          // Only run same-quarter merge when drop actually landed in this list (event.from === event.to).
+          // If we dropped in another quarter, Sortable's onAdd handles it; merging here would duplicate.
+          const droppedInSameList = evt.from === evt.to;
           const targetIdx = abTargetSlotIndexRef.current;
           const targetSub = abTargetSubIndexRef.current;
           const draggedIdx = activeCourseDraggedFrom?.courseIndex;
           const isReorderSameQuarter =
+            droppedInSameList &&
             activeCourseDraggedFrom &&
             draggedIdx != null &&
             targetIdx != null &&
@@ -530,7 +772,7 @@ const Quarter: FC<QuarterProps> = ({ yearIndex, quarterIndex, data }) => {
 
           if (isReorderSameQuarter) {
             const targetSlot = data.courses[targetIdx];
-            const draggedSlot = data.courses[draggedIdx];
+            const draggedSlot = data.courses[draggedIdx!];
             if (draggedSlot && draggedIdx !== targetIdx) {
               if (targetSlot?.type === 'ab' && targetSub != null) {
                 const revision = swapAbChoiceSubWithSlot(
@@ -539,7 +781,7 @@ const Quarter: FC<QuarterProps> = ({ yearIndex, quarterIndex, data }) => {
                   data,
                   targetIdx,
                   targetSub,
-                  draggedIdx,
+                  draggedIdx!,
                   draggedSlot,
                 );
                 dispatch(reviseRoadmap(revision));
@@ -549,7 +791,7 @@ const Quarter: FC<QuarterProps> = ({ yearIndex, quarterIndex, data }) => {
                   currentPlan.id,
                   startYear,
                   data,
-                  draggedIdx,
+                  draggedIdx!,
                   targetIdx,
                   draggedSlot,
                 );
@@ -558,7 +800,6 @@ const Quarter: FC<QuarterProps> = ({ yearIndex, quarterIndex, data }) => {
               }
             }
           }
-
           if (!activeCourseLoading) dispatch(setActiveCourse(null));
           if (abTargetTimerRef.current) {
             clearTimeout(abTargetTimerRef.current);
@@ -582,6 +823,7 @@ const Quarter: FC<QuarterProps> = ({ yearIndex, quarterIndex, data }) => {
               slotRefs.current[index] = el;
             }}
             className="quarter-course-slot-wrapper"
+            data-slot-index={index}
           >
             <QuarterCourseSlot
               slot={slot}
@@ -591,6 +833,7 @@ const Quarter: FC<QuarterProps> = ({ yearIndex, quarterIndex, data }) => {
               invalidCourses={invalidCourses}
               removeCourseAt={removeCourseAt}
               removeAbSubAt={removeAbSubAt}
+              onSwapAbAt={swapAbAt}
               isAbTarget={abTargetSlotIndex === index}
               isAbTargetSub={abTargetSlotIndex === index ? abTargetSubIndex : null}
             />
